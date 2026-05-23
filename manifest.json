@@ -10,8 +10,8 @@
   ],
   "host_permissions": [
     "https://api.deepseek.com/*",
-    "https://aip.baidubce.com/*",
-    "https://vop.baidu.com/*"
+    "https://hf-mirror.com/*",
+    "https://cdn.jsdelivr.net/*"
   ],
   "action": {
     "default_popup": "index.html",

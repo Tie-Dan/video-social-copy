@@ -1,97 +1,79 @@
 /**
- * 百度语音识别 ASR 客户端
+ * 本地语音识别 — 使用 Whisper 模型在浏览器内运行
  *
- * 1. 用 API Key + Secret Key 换 access_token
- * 2. 用 access_token 调 ASR 接口
- *
- * 开通: https://console.bce.baidu.com/ai/#/ai/speech/overview
- *   领免费额度 → 创建应用 → 获取 API Key 和 Secret Key
+ * 模型首次加载从 hf-mirror.com 下载（约 40MB），之后缓存到浏览器中
+ * 完全离线可用，不依赖任何外部 API
  */
 
-const TOKEN_URL = 'https://aip.baidubce.com/oauth/2.0/token'
-const ASR_URL = 'https://vop.baidu.com/server_api'
+import { pipeline, env } from '@xenova/transformers'
 
-/** 缓存 token，避免每次请求都换 */
-let cachedToken = ''
-let tokenExpiry = 0
+// HF 国内镜像
+env.remoteHost = 'https://hf-mirror.com'
+env.allowLocalModels = false
+// ONNX WASM 从 jsdelivr 加载（国内可访问）
+env.backends.onnx.wasm.wasmPaths =
+  'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.14.0/dist/'
+// Whisper 模型（tiny ~39MB，首次下载后 IndexedDB 缓存）
+const MODEL = 'Xenova/whisper-tiny'
 
-async function getAccessToken(apiKey, secretKey) {
-  if (cachedToken && Date.now() < tokenExpiry) {
-    return cachedToken
-  }
+let transcriber = null
 
-  const url = `${TOKEN_URL}?grant_type=client_credentials&client_id=${apiKey}&client_secret=${secretKey}`
-  const resp = await fetch(url, { method: 'POST' })
-  const data = await resp.json()
+async function getPipeline() {
+  if (transcriber) return transcriber
 
-  if (data.error) {
-    throw new Error(`获取百度 token 失败: ${data.error_description || data.error}`)
-  }
+  const p = await pipeline('automatic-speech-recognition', MODEL, {
+    // 中文 + 返回时间戳
+    language: 'zh',
+    task: 'transcribe',
+    chunk_length_s: 30,
+    stride_length_s: 5,
+  })
 
-  cachedToken = data.access_token
-  // token 有效期通常 30 天，提前 1 天刷新
-  tokenExpiry = Date.now() + (data.expires_in - 86400) * 1000
-  return cachedToken
+  transcriber = p
+  return p
 }
 
-function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
+/**
+ * 将 WAV Blob 转为 Float32Array（16kHz 单声道）
+ * WAV 是 44 字节头 + PCM 数据
+ */
+async function wavToFloat32(wavBlob) {
+  const arrayBuffer = await wavBlob.arrayBuffer()
+  const view = new DataView(arrayBuffer)
+
+  // 跳过 WAV 头
+  const pcmOffset = 44
+  const pcmLength = (arrayBuffer.byteLength - pcmOffset) / 2 // 16-bit samples
+  const samples = new Float32Array(pcmLength)
+
+  for (let i = 0; i < pcmLength; i++) {
+    const int16 = view.getInt16(pcmOffset + i * 2, true)
+    samples[i] = int16 / 32768
   }
-  return btoa(binary)
+
+  return samples
 }
 
 /**
  * @param {Blob} audioWavBlob
- * @param {Object} config - { apiKey, secretKey }
+ * @param {Object} _config - 本地模式无需配置，保留接口兼容
  * @returns {Promise<string>}
  */
-export async function transcribeAudio(audioWavBlob, config) {
-  const { apiKey, secretKey } = config
+export async function transcribeAudio(audioWavBlob, _config) {
+  const audioData = await wavToFloat32(audioWavBlob)
 
-  if (!apiKey || !secretKey) {
-    throw new Error('请先在设置中配置百度语音 API Key 和 Secret Key')
-  }
+  const transcriber = await getPipeline()
 
-  const token = await getAccessToken(apiKey, secretKey)
-  const audioBuffer = await audioWavBlob.arrayBuffer()
-  const speechBase64 = arrayBufferToBase64(audioBuffer)
-
-  const body = JSON.stringify({
-    format: 'wav',
-    rate: 16000,
-    channel: 1,
-    cuid: 'video-copy-ext',
-    token,
-    speech: speechBase64,
-    len: audioBuffer.byteLength,
+  const result = await transcriber(audioData, {
+    // 回调显示进度（可选）
+    callback_function: null,
   })
 
-  const resp = await fetch(ASR_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  })
+  const text = result?.text || ''
 
-  const result = await resp.json()
-
-  if (result.err_no !== 0) {
-    const errors = {
-      3301: '音频质量过差或格式错误',
-      3302: '鉴权失败，请检查 API Key 和 Secret Key',
-      3304: '请求次数超限，请稍后再试',
-      3307: '音频文件过大（不超过 60 秒）',
-    }
-    const msg = errors[result.err_no] || result.err_msg || `错误码: ${result.err_no}`
-    throw new Error(msg)
-  }
-
-  const text = result?.result?.[0] || ''
   if (!text) {
-    throw new Error('未识别到语音内容，请确认视频包含清晰人声')
+    throw new Error('未识别到语音内容，请确认：\n1. 视频包含清晰人声\n2. 视频时长不超过 60 秒')
   }
 
-  return text
+  return text.trim()
 }

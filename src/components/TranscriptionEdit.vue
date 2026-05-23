@@ -54,9 +54,9 @@ defineEmits(['auto-transcribe', 'update:text'])
 
 const progressText = computed(() => {
   const p = props.progress
-  if (p < 0.4) return '提取音频中...'
-  if (p < 0.7) return '识别中...'
-  if (p < 1) return '处理中...'
+  if (p < 0.2) return '提取音频中...'
+  if (p < 0.5) return '加载模型中...'
+  if (p < 0.9) return 'Whisper 识别中...'
   return '完成'
 })
 </script>

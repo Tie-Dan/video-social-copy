@@ -61,24 +61,13 @@ export const useAppStore = defineStore('app', () => {
     error.value = ''
 
     try {
-      // 直接从 chrome.storage 读取，绕过 Pinia 跨页面同步问题
-      let asrConfig = {}
-      try {
-        const result = await chrome.storage.local.get('video_copy_settings')
-        const data = result?.video_copy_settings || {}
-        asrConfig = { apiKey: data.asrApiKey || '', secretKey: data.asrSecretKey || '' }
-      } catch {
-        const raw = localStorage.getItem('video_copy_settings')
-        if (raw) {
-          const data = JSON.parse(raw)
-          asrConfig = { apiKey: data.asrApiKey || '', secretKey: data.asrSecretKey || '' }
-        }
-      }
-
-      transcribeProgress.value = 0.3
+      // Step 1: 提取音频
+      transcribeProgress.value = 0.1
       const audioBlob = await extractAudio(videoFile.value)
-      transcribeProgress.value = 0.5
-      const text = await transcribeAudio(audioBlob, asrConfig)
+
+      // Step 2: 本地 Whisper 识别（首次需下载模型 ~40MB，之后缓存）
+      transcribeProgress.value = 0.3
+      const text = await transcribeAudio(audioBlob)
       transcribeProgress.value = 1
       transcription.value = text
     } catch (e) {
