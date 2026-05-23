@@ -28,6 +28,7 @@ export async function transcribeAudio(audioWavBlob, config) {
   const body = JSON.stringify({
     app: {
       appid: appId,
+      token: accessToken,
       cluster: 'volcengine_input_common',
     },
     audio: {
@@ -42,7 +43,6 @@ export async function transcribeAudio(audioWavBlob, config) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer;${accessToken}`,
       },
       body,
     })
