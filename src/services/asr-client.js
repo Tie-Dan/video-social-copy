@@ -1,73 +1,72 @@
 /**
- * 火山引擎 ASR 客户端 — 语音转文字
+ * 火山引擎 ASR 客户端 — 一句话识别
  *
- * 火山引擎 一句话识别 API：
- *   POST https://openspeech.bytedance.com/api/v1/asr
- *   Header: Authorization: Bearer;{token}
- *   Body: raw audio (WAV/PCM)
+ * API: POST https://openspeech.bytedance.com/api/v1/asr
+ * Auth: Authorization: Bearer;{access_token}
  *
- * 用户需要：
- *   1. 注册火山引擎 https://console.volcengine.com/
- *   2. 开通「语音识别」服务
- *   3. 获取 App ID 和 Access Token
+ * 开通: https://console.volcengine.com/speech/service/8
+ *   注册 → 实名 → 开通「一句话识别」→ 获取 App ID 和 Access Token
  */
 
 const ASR_ENDPOINT = 'https://openspeech.bytedance.com/api/v1/asr'
 
 /**
- * 将 WAV Blob 转为 PCM Int16 ArrayBuffer
- * WAV 格式 = 44字节头 + PCM数据
- */
-async function wavToPcm(wavBlob) {
-  const arrayBuffer = await wavBlob.arrayBuffer()
-  // 跳过 44 字节 WAV 头，只取 PCM 数据
-  return arrayBuffer.slice(44)
-}
-
-/**
  * 调用火山引擎 ASR 转写音频
- * @param {Blob} audioBlob - WAV 音频
- * @param {Object} config - { appId, accessToken, cluster? }
+ * @param {Blob} audioWavBlob - WAV 音频 Blob
+ * @param {Object} config - { appId, accessToken }
  * @returns {Promise<string>} 转写文本
  */
-export async function transcribeAudio(audioBlob, config) {
-  const { appId, accessToken, cluster = 'volcengine_input_edu' } = config
+export async function transcribeAudio(audioWavBlob, config) {
+  const { appId, accessToken } = config
 
   if (!appId || !accessToken) {
     throw new Error('请先在设置中配置火山引擎 App ID 和 Access Token')
   }
 
-  // WAV → PCM
-  const pcmData = await wavToPcm(audioBlob)
+  const audioBytes = await audioWavBlob.arrayBuffer()
 
-  const url = `${ASR_ENDPOINT}?appid=${appId}&cluster=${cluster}`
+  // 一句话识别 API，传 WAV 格式
+  const url = `${ASR_ENDPOINT}?appid=${encodeURIComponent(appId)}&format=wav`
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer;${accessToken}`,
-      'Content-Type': 'audio/pcm',
-      'Content-Length': String(pcmData.byteLength),
-    },
-    body: pcmData,
-  })
+  let response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer;${accessToken}`,
+        'Content-Type': 'audio/wav',
+      },
+      body: audioBytes,
+    })
+  } catch (e) {
+    throw new Error('网络请求失败，请检查网络连接: ' + e.message)
+  }
+
+  const respText = await response.text()
 
   if (!response.ok) {
-    const errText = await response.text()
     let msg = `语音识别请求失败 (${response.status})`
     try {
-      const err = JSON.parse(errText)
+      const err = JSON.parse(respText)
+      // 火山引擎错误格式: {code: xxx, message: "..."} 或 {result: {message: "..."}}
       msg = err.message || err.result?.message || msg
     } catch {}
     throw new Error(msg)
   }
 
-  const result = await response.json()
-  const text = result?.result?.[0]?.text || result?.text || ''
+  try {
+    const result = JSON.parse(respText)
 
-  if (!text) {
-    throw new Error('未识别到语音内容，请确认视频包含人声')
+    // 火山引擎返回格式: {result: [{text: "识别文本"}], ...}
+    const text = result?.result?.[0]?.text || result?.text || result?.result?.text || ''
+
+    if (!text) {
+      throw new Error('未识别到语音内容，请确认：\n1. 视频包含人声\n2. 视频时长不超过 60 秒\n3. 火山引擎账户余额充足')
+    }
+
+    return text
+  } catch (e) {
+    if (e.message.startsWith('未识别')) throw e
+    throw new Error('解析语音识别结果失败，返回内容: ' + respText.slice(0, 200))
   }
-
-  return text
 }
