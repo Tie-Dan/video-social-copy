@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://api.deepseek.com/*",
-    "https://openspeech.bytedance.com/*"
+    "https://aip.baidubce.com/*",
+    "https://vop.baidu.com/*"
   ],
   "action": {
     "default_popup": "index.html",

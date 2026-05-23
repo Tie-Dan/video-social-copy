@@ -1,10 +1,38 @@
 /**
- * 火山引擎 ASR 客户端 — 一句话识别
+ * 百度语音识别 ASR 客户端
  *
- * 开通: https://console.volcengine.com/speech/service/8
+ * 1. 用 API Key + Secret Key 换 access_token
+ * 2. 用 access_token 调 ASR 接口
+ *
+ * 开通: https://console.bce.baidu.com/ai/#/ai/speech/overview
+ *   领免费额度 → 创建应用 → 获取 API Key 和 Secret Key
  */
 
-const ASR_ENDPOINT = 'https://openspeech.bytedance.com/api/v1/asr'
+const TOKEN_URL = 'https://aip.baidubce.com/oauth/2.0/token'
+const ASR_URL = 'https://vop.baidu.com/server_api'
+
+/** 缓存 token，避免每次请求都换 */
+let cachedToken = ''
+let tokenExpiry = 0
+
+async function getAccessToken(apiKey, secretKey) {
+  if (cachedToken && Date.now() < tokenExpiry) {
+    return cachedToken
+  }
+
+  const url = `${TOKEN_URL}?grant_type=client_credentials&client_id=${apiKey}&client_secret=${secretKey}`
+  const resp = await fetch(url, { method: 'POST' })
+  const data = await resp.json()
+
+  if (data.error) {
+    throw new Error(`获取百度 token 失败: ${data.error_description || data.error}`)
+  }
+
+  cachedToken = data.access_token
+  // token 有效期通常 30 天，提前 1 天刷新
+  tokenExpiry = Date.now() + (data.expires_in - 86400) * 1000
+  return cachedToken
+}
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer)
@@ -15,63 +43,55 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary)
 }
 
+/**
+ * @param {Blob} audioWavBlob
+ * @param {Object} config - { apiKey, secretKey }
+ * @returns {Promise<string>}
+ */
 export async function transcribeAudio(audioWavBlob, config) {
-  const { appId, accessToken } = config
+  const { apiKey, secretKey } = config
 
-  if (!appId || !accessToken) {
-    throw new Error('请先在设置中配置火山引擎 App ID 和 Access Token')
+  if (!apiKey || !secretKey) {
+    throw new Error('请先在设置中配置百度语音 API Key 和 Secret Key')
   }
 
+  const token = await getAccessToken(apiKey, secretKey)
   const audioBuffer = await audioWavBlob.arrayBuffer()
-  const audioBase64 = arrayBufferToBase64(audioBuffer)
+  const speechBase64 = arrayBufferToBase64(audioBuffer)
 
   const body = JSON.stringify({
-    app: {
-      appid: appId,
-      token: accessToken,
-      cluster: 'volcengine_input_common',
-    },
-    audio: {
-      format: 'wav',
-      data: audioBase64,
-    },
+    format: 'wav',
+    rate: 16000,
+    channel: 1,
+    cuid: 'video-copy-ext',
+    token,
+    speech: speechBase64,
+    len: audioBuffer.byteLength,
   })
 
-  let response
-  try {
-    response = await fetch(ASR_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body,
-    })
-  } catch (e) {
-    throw new Error('网络请求失败: ' + e.message)
-  }
+  const resp = await fetch(ASR_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
 
-  const respText = await response.text()
+  const result = await resp.json()
 
-  if (!response.ok) {
-    let msg = `语音识别请求失败 (${response.status})`
-    try {
-      const err = JSON.parse(respText)
-      msg = err.message || err.result?.message || msg
-    } catch {}
+  if (result.err_no !== 0) {
+    const errors = {
+      3301: '音频质量过差或格式错误',
+      3302: '鉴权失败，请检查 API Key 和 Secret Key',
+      3304: '请求次数超限，请稍后再试',
+      3307: '音频文件过大（不超过 60 秒）',
+    }
+    const msg = errors[result.err_no] || result.err_msg || `错误码: ${result.err_no}`
     throw new Error(msg)
   }
 
-  try {
-    const result = JSON.parse(respText)
-    const text = result?.result?.[0]?.text || result?.text || result?.result?.text || ''
-
-    if (!text) {
-      throw new Error('未识别到语音内容。请确认：1. 视频包含清晰人声 2. 时长 ≤ 60 秒')
-    }
-
-    return text
-  } catch (e) {
-    if (e.message.startsWith('未识别')) throw e
-    throw new Error('解析识别结果失败')
+  const text = result?.result?.[0] || ''
+  if (!text) {
+    throw new Error('未识别到语音内容，请确认视频包含清晰人声')
   }
+
+  return text
 }

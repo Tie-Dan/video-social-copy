@@ -66,12 +66,12 @@ export const useAppStore = defineStore('app', () => {
       try {
         const result = await chrome.storage.local.get('video_copy_settings')
         const data = result?.video_copy_settings || {}
-        asrConfig = { appId: data.asrAppId || '', accessToken: data.asrToken || '' }
+        asrConfig = { apiKey: data.asrApiKey || '', secretKey: data.asrSecretKey || '' }
       } catch {
         const raw = localStorage.getItem('video_copy_settings')
         if (raw) {
           const data = JSON.parse(raw)
-          asrConfig = { appId: data.asrAppId || '', accessToken: data.asrToken || '' }
+          asrConfig = { apiKey: data.asrApiKey || '', secretKey: data.asrSecretKey || '' }
         }
       }
 

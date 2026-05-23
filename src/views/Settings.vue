@@ -47,29 +47,25 @@
 
     <!-- ASR 配置 -->
     <section class="settings-section">
-      <h2>语音识别（ASR）配置</h2>
+      <h2>语音识别配置（百度语音）</h2>
       <p class="desc">
-        上传视频后自动提取语音转文字。使用火山引擎语音识别服务，
-        <a href="https://console.volcengine.com/speech/service/8" target="_blank">点此开通</a>
+        上传视频后自动提取语音转文字。
+        <a href="https://console.bce.baidu.com/ai/#/ai/speech/overview" target="_blank">点此开通百度语音识别</a>
       </p>
       <p class="desc" style="margin-bottom:12px;">
-        <strong>开通步骤：</strong>注册 → 实名认证 → 开通「一句话识别」→ 获取 App ID 和 Access Token
+        <strong>开通步骤：</strong>注册百度智能云 → 领免费额度 → 创建应用 → 获取 API Key 和 Secret Key
       </p>
       <div class="form-group">
-        <label>App ID</label>
-        <input
-          v-model="asrAppIdInput"
-          placeholder="从火山引擎控制台获取"
-          class="input"
-        />
+        <label>API Key</label>
+        <input v-model="asrApiKeyInput" placeholder="百度应用 API Key" class="input" />
       </div>
       <div class="form-group">
-        <label>Access Token</label>
+        <label>Secret Key</label>
         <div class="input-row">
           <input
             :type="showAsrToken ? 'text' : 'password'"
-            v-model="asrTokenInput"
-            placeholder="从火山引擎控制台获取"
+            v-model="asrSecretKeyInput"
+            placeholder="百度应用 Secret Key"
             class="input"
           />
           <button class="toggle-btn" @click="showAsrToken = !showAsrToken">
@@ -130,8 +126,8 @@ const store = useSettingsStore()
 
 const apiKeyInput = ref('')
 const modelInput = ref('deepseek-chat')
-const asrAppIdInput = ref('')
-const asrTokenInput = ref('')
+const asrApiKeyInput = ref('')
+const asrSecretKeyInput = ref('')
 const showKey = ref(false)
 const showAsrToken = ref(false)
 const saving = ref(false)
@@ -145,8 +141,8 @@ onMounted(async () => {
   await store.load()
   apiKeyInput.value = store.deepseekApiKey
   modelInput.value = store.deepseekModel
-  asrAppIdInput.value = store.asrAppId
-  asrTokenInput.value = store.asrToken
+  asrApiKeyInput.value = store.asrApiKey
+  asrSecretKeyInput.value = store.asrSecretKey
 })
 
 async function saveApiConfig() {
@@ -169,7 +165,7 @@ async function saveAsrConfig() {
   savingAsr.value = true
   asrMsg.value = null
   try {
-    await store.setAsrConfig(asrAppIdInput.value, asrTokenInput.value)
+    await store.setAsrConfig(asrApiKeyInput.value, asrSecretKeyInput.value)
     asrMsg.value = { ok: true, msg: '语音识别配置保存成功 ✓' }
     setTimeout(() => { asrMsg.value = null }, 2500)
   } catch (e) {

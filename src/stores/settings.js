@@ -9,8 +9,8 @@ const STORAGE_KEY = 'video_copy_settings'
 export const useSettingsStore = defineStore('settings', () => {
   const deepseekApiKey = ref('')
   const deepseekModel = ref('deepseek-chat')
-  const asrAppId = ref('')
-  const asrToken = ref('')
+  const asrApiKey = ref('')
+  const asrSecretKey = ref('')
   const history = ref([])
   const maxHistory = ref(20)
   const initialized = ref(false)
@@ -23,8 +23,8 @@ export const useSettingsStore = defineStore('settings', () => {
       if (data) {
         deepseekApiKey.value = data.deepseekApiKey || ''
         deepseekModel.value = data.deepseekModel || 'deepseek-chat'
-        asrAppId.value = data.asrAppId || ''
-        asrToken.value = data.asrToken || ''
+        asrApiKey.value = data.asrApiKey || ''
+        asrSecretKey.value = data.asrSecretKey || ''
         history.value = data.history || []
         maxHistory.value = data.maxHistory || 20
       }
@@ -35,8 +35,8 @@ export const useSettingsStore = defineStore('settings', () => {
           const data = JSON.parse(raw)
           deepseekApiKey.value = data.deepseekApiKey || ''
           deepseekModel.value = data.deepseekModel || 'deepseek-chat'
-          asrAppId.value = data.asrAppId || ''
-          asrToken.value = data.asrToken || ''
+          asrApiKey.value = data.asrApiKey || ''
+          asrSecretKey.value = data.asrSecretKey || ''
           history.value = data.history || []
           maxHistory.value = data.maxHistory || 20
         }
@@ -49,8 +49,8 @@ export const useSettingsStore = defineStore('settings', () => {
     const data = {
       deepseekApiKey: deepseekApiKey.value,
       deepseekModel: deepseekModel.value,
-      asrAppId: asrAppId.value,
-      asrToken: asrToken.value,
+      asrApiKey: asrApiKey.value,
+      asrSecretKey: asrSecretKey.value,
       history: history.value,
       maxHistory: maxHistory.value,
     }
@@ -63,7 +63,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function setApiKey(key) { deepseekApiKey.value = key; await save() }
   async function setModel(model) { deepseekModel.value = model; await save() }
-  async function setAsrConfig(appId, token) { asrAppId.value = appId; asrToken.value = token; await save() }
+  async function setAsrConfig(apiKey, secretKey) { asrApiKey.value = apiKey; asrSecretKey.value = secretKey; await save() }
 
   async function addHistory(entry) {
     history.value.unshift({ id: Date.now(), timestamp: new Date().toISOString(), ...entry })
@@ -78,8 +78,8 @@ export const useSettingsStore = defineStore('settings', () => {
     return {
       deepseekApiKey: deepseekApiKey.value,
       deepseekModel: deepseekModel.value,
-      asrAppId: asrAppId.value,
-      asrToken: asrToken.value,
+      asrApiKey: asrApiKey.value,
+      asrSecretKey: asrSecretKey.value,
       history: history.value,
       maxHistory: maxHistory.value,
       exportTime: new Date().toISOString(),
@@ -90,15 +90,15 @@ export const useSettingsStore = defineStore('settings', () => {
   async function importData(data) {
     if (data.deepseekApiKey) deepseekApiKey.value = data.deepseekApiKey
     if (data.deepseekModel) deepseekModel.value = data.deepseekModel
-    if (data.asrAppId) asrAppId.value = data.asrAppId
-    if (data.asrToken) asrToken.value = data.asrToken
+    if (data.asrApiKey) asrApiKey.value = data.asrApiKey
+    if (data.asrSecretKey) asrSecretKey.value = data.asrSecretKey
     if (data.history) history.value = data.history
     if (data.maxHistory) maxHistory.value = data.maxHistory
     await save()
   }
 
   return {
-    deepseekApiKey, deepseekModel, asrAppId, asrToken,
+    deepseekApiKey, deepseekModel, asrApiKey, asrSecretKey,
     history, maxHistory, initialized,
     load, save, setApiKey, setModel, setAsrConfig,
     addHistory, removeHistory, clearHistory,
