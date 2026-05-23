@@ -1,18 +1,11 @@
 /**
  * 火山引擎 ASR 客户端 — 一句话识别
  *
- * POST https://openspeech.bytedance.com/api/v1/asr
- * Content-Type: application/json
- * Body: { app: {appid, token, cluster}, audio: {format, data: base64} }
- *
  * 开通: https://console.volcengine.com/speech/service/8
  */
 
 const ASR_ENDPOINT = 'https://openspeech.bytedance.com/api/v1/asr'
 
-/**
- * ArrayBuffer → base64 字符串
- */
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer)
   let binary = ''
@@ -22,11 +15,6 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary)
 }
 
-/**
- * @param {Blob} audioWavBlob - WAV 音频
- * @param {Object} config - { appId, accessToken }
- * @returns {Promise<string>}
- */
 export async function transcribeAudio(audioWavBlob, config) {
   const { appId, accessToken } = config
 
@@ -40,11 +28,7 @@ export async function transcribeAudio(audioWavBlob, config) {
   const body = JSON.stringify({
     app: {
       appid: appId,
-      token: accessToken,
       cluster: 'volcengine_input_common',
-    },
-    user: {
-      uid: 'video-copy-extension',
     },
     audio: {
       format: 'wav',
@@ -58,6 +42,7 @@ export async function transcribeAudio(audioWavBlob, config) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer;${accessToken}`,
       },
       body,
     })
@@ -81,9 +66,7 @@ export async function transcribeAudio(audioWavBlob, config) {
     const text = result?.result?.[0]?.text || result?.text || result?.result?.text || ''
 
     if (!text) {
-      throw new Error(
-        '未识别到语音内容。请确认：\n1. 视频包含清晰人声\n2. 视频时长 ≤ 60 秒\n3. 火山引擎账户余额充足'
-      )
+      throw new Error('未识别到语音内容。请确认：1. 视频包含清晰人声 2. 时长 ≤ 60 秒')
     }
 
     return text

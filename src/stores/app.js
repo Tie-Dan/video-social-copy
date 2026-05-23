@@ -8,43 +8,32 @@ import { getDefaultPlatformIds } from '../config/platforms.js'
 import { getProvider } from '../config/models.js'
 import { getVideoInfo, getVideoThumbnail, extractAudio } from '../services/video-processor.js'
 import { transcribeAudio } from '../services/asr-client.js'
-import { startDictation } from '../services/speech-recognition.js'
 import { generateContent } from '../services/deepseek-client.js'
 import { buildAllPlatformMessages, buildMessages } from '../services/prompt-engine.js'
 
 export const useAppStore = defineStore('app', () => {
-  // ====== 视频 ======
   const videoFile = ref(null)
   const videoUrl = ref(null)
   const videoInfo = ref(null)
   const thumbnail = ref(null)
 
-  // ====== 转写 ======
   const transcription = ref('')
   const isTranscribing = ref(false)
   const transcribeProgress = ref(0)
-  const isRecording = ref(false)
-  const dictationCtrl = ref(null)
-
-  // ====== 平台 & 生成 ======
   const selectedPlatforms = ref(getDefaultPlatformIds())
   const results = ref({})
   const isGenerating = ref(false)
   const error = ref('')
 
-  // ====== 设置 ======
   const apiKey = ref('')
   const model = ref('deepseek-chat')
   const asrAppId = ref('')
   const asrToken = ref('')
 
-  // ====== 计算属性 ======
   const hasVideo = computed(() => !!videoFile.value)
   const hasTranscription = computed(() => transcription.value.length > 0)
   const hasResults = computed(() => Object.keys(results.value).length > 0)
   const canGenerate = computed(() => hasVideo.value && !isGenerating.value)
-
-  // ====== 视频操作 ======
 
   async function setVideo(file) {
     resetAll()
@@ -67,73 +56,33 @@ export const useAppStore = defineStore('app', () => {
     resetAll()
   }
 
-  // ====== ASR 自动转写 ======
-
   async function startAutoTranscribe() {
     if (!videoFile.value) return
-
     isTranscribing.value = true
     transcribeProgress.value = 0
     error.value = ''
-    transcription.value = ''
 
     try {
-      // Step 1: 提取音频
-      transcribeProgress.value = 0.1
-      const audioBlob = await extractAudio(videoFile.value)
-
-      // Step 2: 发送 ASR
       transcribeProgress.value = 0.3
+      const audioBlob = await extractAudio(videoFile.value)
+      transcribeProgress.value = 0.5
       const text = await transcribeAudio(audioBlob, {
         appId: asrAppId.value,
         accessToken: asrToken.value,
       })
-
       transcribeProgress.value = 1
       transcription.value = text
     } catch (e) {
-      error.value = `自动识别失败: ${e.message}`
+      error.value = `识别失败: ${e.message}`
     } finally {
       isTranscribing.value = false
     }
   }
 
-  // ====== 口述识别（备选） ======
-
-  function startRecording() {
-    isRecording.value = true
-    error.value = ''
-
-    dictationCtrl.value = startDictation({
-      onResult: (text) => { transcription.value = text },
-      onDone: (text) => {
-        transcription.value = text
-        isRecording.value = false
-        dictationCtrl.value = null
-      },
-      onError: (msg) => {
-        error.value = msg
-        isRecording.value = false
-        dictationCtrl.value = null
-      },
-    })
-  }
-
-  function stopRecording() {
-    dictationCtrl.value?.stop()
-    isRecording.value = false
-    dictationCtrl.value = null
-  }
-
-  function setTranscription(text) {
-    transcription.value = text
-  }
-
-  // ====== 生成文案 ======
+  function setTranscription(text) { transcription.value = text }
 
   async function generateCopy() {
     if (!canGenerate.value) return
-
     isGenerating.value = true
     error.value = ''
     results.value = {}
@@ -158,7 +107,6 @@ export const useAppStore = defineStore('app', () => {
     }
 
     const platformMessages = buildAllPlatformMessages(selectedPlatforms.value, videoData)
-
     const promises = selectedPlatforms.value.map(async (platformId) => {
       const msg = platformMessages.get(platformId)
       try {
@@ -171,20 +119,13 @@ export const useAppStore = defineStore('app', () => {
 
     const allResults = await Promise.all(promises)
     for (const { platformId, result, error: err } of allResults) {
-      if (result) {
-        results.value[platformId] = result
-      } else if (err) {
-        results.value[platformId] = { titles: [], description: '', tags: [], _error: err }
-      }
+      if (result) results.value[platformId] = result
+      else if (err) results.value[platformId] = { titles: [], description: '', tags: [], _error: err }
     }
-
     isGenerating.value = false
   }
 
-  // ====== 重置 ======
-
   function resetAll() {
-    stopRecording()
     videoFile.value = null
     videoUrl.value = null
     videoInfo.value = null
@@ -206,11 +147,11 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     videoFile, videoUrl, videoInfo, thumbnail,
-    transcription, isTranscribing, transcribeProgress, isRecording,
+    transcription, isTranscribing, transcribeProgress,
     selectedPlatforms, results, isGenerating, error,
     hasVideo, hasTranscription, hasResults, canGenerate,
     setVideo, removeVideo,
-    startAutoTranscribe, startRecording, stopRecording, setTranscription,
-    generateCopy, resetAll, syncSettings,
+    startAutoTranscribe, setTranscription, generateCopy,
+    resetAll, syncSettings,
   }
 })
