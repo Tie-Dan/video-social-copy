@@ -61,13 +61,21 @@ export const useAppStore = defineStore('app', () => {
     error.value = ''
 
     try {
-      // Step 1: 提取音频
-      transcribeProgress.value = 0.1
-      const audioBlob = await extractAudio(videoFile.value)
+      // 从 chrome.storage 读取讯飞配置
+      let asrCfg = {}
+      try {
+        const r = await chrome.storage.local.get('video_copy_settings')
+        const d = r?.video_copy_settings || {}
+        asrCfg = { appId: d.asrAppId || '', apiKey: d.asrApiKey || '' }
+      } catch {
+        const raw = localStorage.getItem('video_copy_settings')
+        if (raw) { const d = JSON.parse(raw); asrCfg = { appId: d.asrAppId || '', apiKey: d.asrApiKey || '' } }
+      }
 
-      // Step 2: 本地 Whisper 识别（首次需下载模型 ~40MB，之后缓存）
-      transcribeProgress.value = 0.3
-      const text = await transcribeAudio(audioBlob)
+      transcribeProgress.value = 0.2
+      const audioBlob = await extractAudio(videoFile.value)
+      transcribeProgress.value = 0.5
+      const text = await transcribeAudio(audioBlob, asrCfg)
       transcribeProgress.value = 1
       transcription.value = text
     } catch (e) {

@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@xenova/transformers": "^2.14.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.21"
   },

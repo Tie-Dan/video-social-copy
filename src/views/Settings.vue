@@ -45,13 +45,32 @@
       </div>
     </section>
 
-    <!-- 语音识别 -->
+    <!-- ASR 配置 -->
     <section class="settings-section">
-      <h2>语音识别（本地 Whisper）</h2>
+      <h2>语音识别配置（讯飞）</h2>
       <p class="desc">
-        使用浏览器本地 Whisper 模型识别语音，完全离线可用。
-        首次使用需下载模型文件（约 40MB），之后自动缓存，无需任何 API Key。
+        上传视频后自动提取语音转文字。
+        <a href="https://www.xfyun.cn/" target="_blank">点此注册讯飞</a> → 控制台 → 语音听写 → 创建应用，免费 500次/天
       </p>
+      <div class="form-group">
+        <label>App ID</label>
+        <input v-model="asrAppIdInput" placeholder="讯飞控制台获取" class="input" />
+      </div>
+      <div class="form-group">
+        <label>API Key</label>
+        <input
+          :type="showAsrKey ? 'text' : 'password'"
+          v-model="asrApiKeyInput"
+          placeholder="讯飞控制台获取"
+          class="input"
+        />
+      </div>
+      <button class="btn btn-primary" @click="saveAsrConfig" :disabled="savingAsr">
+        {{ savingAsr ? '保存中...' : '保存语音识别配置' }}
+      </button>
+      <div v-if="asrMsg" class="test-result" :class="asrMsg.ok ? 'ok' : 'fail'">
+        {{ asrMsg.msg }}
+      </div>
     </section>
 
     <!-- 历史记录 -->
@@ -99,16 +118,23 @@ const store = useSettingsStore()
 
 const apiKeyInput = ref('')
 const modelInput = ref('deepseek-chat')
+const asrAppIdInput = ref('')
+const asrApiKeyInput = ref('')
 const showKey = ref(false)
+const showAsrKey = ref(false)
 const saving = ref(false)
+const savingAsr = ref(false)
 const testing = ref(false)
 const testResult = ref(null)
 const saveMsg = ref(null)
+const asrMsg = ref(null)
 
 onMounted(async () => {
   await store.load()
   apiKeyInput.value = store.deepseekApiKey
   modelInput.value = store.deepseekModel
+  asrAppIdInput.value = store.asrAppId
+  asrApiKeyInput.value = store.asrApiKey
 })
 
 async function saveApiConfig() {
@@ -125,6 +151,17 @@ async function saveApiConfig() {
   } finally {
     saving.value = false
   }
+}
+
+async function saveAsrConfig() {
+  savingAsr.value = true; asrMsg.value = null
+  try {
+    await store.setAsrConfig(asrAppIdInput.value, asrApiKeyInput.value)
+    asrMsg.value = { ok: true, msg: '保存成功 ✓' }
+    setTimeout(() => { asrMsg.value = null }, 2500)
+  } catch (e) {
+    asrMsg.value = { ok: false, msg: `保存失败: ${e.message}` }
+  } finally { savingAsr.value = false }
 }
 
 async function testConnection() {

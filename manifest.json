@@ -10,9 +10,7 @@
   ],
   "host_permissions": [
     "https://api.deepseek.com/*",
-    "https://huggingface.co/*",
-    "https://hf-mirror.com/*",
-    "https://cdn.jsdelivr.net/*"
+    "https://api.xfyun.cn/*"
   ],
   "action": {
     "default_popup": "index.html",
