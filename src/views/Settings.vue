@@ -37,6 +37,9 @@
           {{ testing ? '测试中...' : '测试连接' }}
         </button>
       </div>
+      <div v-if="saveMsg" class="test-result" :class="saveMsg.ok ? 'ok' : 'fail'">
+        {{ saveMsg.msg }}
+      </div>
       <div v-if="testResult" class="test-result" :class="testResult.ok ? 'ok' : 'fail'">
         {{ testResult.msg }}
       </div>
@@ -91,6 +94,7 @@ const showKey = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const testResult = ref(null)
+const saveMsg = ref(null)
 
 onMounted(async () => {
   await store.load()
@@ -100,10 +104,15 @@ onMounted(async () => {
 
 async function saveApiConfig() {
   saving.value = true
+  saveMsg.value = null
   testResult.value = null
   try {
     await store.setApiKey(apiKeyInput.value)
     await store.setModel(modelInput.value)
+    saveMsg.value = { ok: true, msg: '保存成功 ✓' }
+    setTimeout(() => { saveMsg.value = null }, 2500)
+  } catch (e) {
+    saveMsg.value = { ok: false, msg: `保存失败: ${e.message}` }
   } finally {
     saving.value = false
   }

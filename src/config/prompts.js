@@ -1,54 +1,75 @@
 /**
- * 各平台默认 Prompt 模板
- * 变量：
- *   {{transcription}} - 转写文本
- *   {{visual_description}} - 画面描述
- *   {{duration}} - 视频时长
- *   {{platform}} - 平台名称
+ * 各平台 Prompt 模板
+ * 核心思路：少啰嗦指令，直接让模型模仿平台爆款风格
  */
 
-/** 生成 System Prompt */
+/**
+ * 构建简洁有力的 System Prompt
+ */
 export function buildSystemPrompt(platform) {
-  const base = `你是一个专业的短视频运营专家，擅长为${platform.name}平台创作高互动率的内容。
+  if (platform.id === 'douyin') {
+    return `你是抖音爆款文案写手。把视频内容变成吸睛标题+描述+标签。
 
-你的任务是根据用户提供的视频转写内容和画面描述，生成适合${platform.name}平台发布的标题、描述和标签。
+规则：
+- 标题 ≤55字，前5个字必须有钩子（好奇心/痛点/反常识）
+- 描述口语化，多用「你」「我」，结尾引导互动（点赞/评论/关注）
+- 标签带#，选平台热门话题
+- 用JSON返回：{"titles":["标题1","标题2"],"description":"描述","tags":["标签1","标签2"]}`
+  }
 
-${platform.name}平台规则：
-${platform.rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+  if (platform.id === 'xiaohongshu') {
+    return `你是小红书爆款笔记写手。把视频内容变成种草风格的标题+正文+标签。
 
-风格参考：
-- 标题示例：${platform.example.title}
-- 描述风格：${platform.descStyle}
-- 标签风格：${platform.tagStyle}
+规则：
+- 标题 ≤20字，精简有力，用emoji点睛
+- 正文像闺蜜分享：开头抛痛点/效果 → 中间分步骤/要点 → 结尾互动
+- 善用emoji分段（✨📌💡），读起来有呼吸感
+- 标签放在末尾，5个左右
+- 用JSON返回：{"titles":["标题1","标题2"],"description":"描述","tags":["标签1","标签2"]}`
+  }
 
-重要：
-- 标题字数不超过${platform.titleLimit}字
-- 严格按照JSON格式返回，不要有任何额外文字
-- description中可以合理使用emoji增加可读性`
+  if (platform.id === 'kuaishou') {
+    return `你是快手文案写手。把视频内容变成接地气的老铁风格标题+描述+标签。
 
-  return base
+规则：
+- 标题 ≤30字，突出真实感和实用性
+- 描述像跟老铁唠嗑，自然不做作，避免文艺腔
+- 「这招真绝了」「兄弟们」「老铁们」「干货」这类词适当使用
+- 标签2-3个，简短
+- 用JSON返回：{"titles":["标题1","标题2"],"description":"描述","tags":["标签1","标签2"]}`
+  }
+
+  if (platform.id === 'shipinhao') {
+    return `你是视频号文案写手。把视频内容变成适合微信朋友圈传播的标题+描述+标签。
+
+规则：
+- 标题 ≤30字，有传播力，适合转发
+- 描述比抖音正式、比公众号轻松，可带入个人观点和感悟
+- 利用社交属性，引导转发分享
+- 标签2-3个，带#
+- 用JSON返回：{"titles":["标题1","标题2"],"description":"描述","tags":["标签1","标签2"]}`
+  }
+
+  return ''
 }
 
-/** 生成 User Prompt */
+/**
+ * 构建 User Prompt — 关键是让模型理解视频内容
+ */
 export function buildUserPrompt(platform, transcription, visualDescription, duration) {
-  let prompt = `请根据以下视频内容，为【${platform.name}】平台生成发布文案：\n\n`
+  let prompt = ''
 
   if (transcription) {
-    prompt += `【视频转写文本】\n${transcription}\n\n`
-  }
-  if (visualDescription) {
-    prompt += `【视频画面描述】\n${visualDescription}\n\n`
-  }
-  if (duration) {
-    prompt += `【视频时长】${duration}\n\n`
+    prompt += `视频内容是：\n"""\n${transcription}\n"""\n\n`
+  } else {
+    prompt += '请根据用户上传的视频内容生成文案。\n\n'
   }
 
-  prompt += `请以JSON格式返回（不要包含markdown代码块标记）：
-{
-  "titles": ["标题备选1", "标题备选2", "标题备选3"],
-  "description": "描述正文",
-  "tags": ["标签1", "标签2", "标签3"]
-}`
+  if (duration) {
+    prompt += `视频时长约${duration}。\n`
+  }
+
+  prompt += `为【${platform.name}】平台生成发布文案。只返回JSON，不要其他文字。`
 
   return prompt
 }

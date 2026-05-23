@@ -1,22 +1,28 @@
 <template>
   <div class="transcription-edit">
     <div class="header">
-      <span class="section-label">视频转写文本</span>
+      <span class="section-label">视频内容描述</span>
       <div class="header-actions">
-        <span v-if="isTranscribing" class="status-badge recording">
-          <span class="pulse"></span>
-          识别中...
-        </span>
+        <!-- 未录音时：显示开始口述按钮 -->
         <button
-          v-if="hasVideo && !isTranscribing"
-          class="btn-action"
-          @click="$emit('transcribe')"
+          v-if="!isRecording && hasVideo"
+          class="btn-record"
+          @click="$emit('start-record')"
         >
-          🎤 语音识别
+          🎤 口述内容
+        </button>
+        <!-- 录音中：显示停止按钮 -->
+        <button
+          v-if="isRecording"
+          class="btn-record recording"
+          @click="$emit('stop-record')"
+        >
+          <span class="pulse"></span>
+          停止录音
         </button>
         <button
           v-if="text"
-          class="btn-action btn-clear"
+          class="btn-clear"
           @click="$emit('update:text', '')"
         >
           清空
@@ -24,37 +30,36 @@
       </div>
     </div>
 
-    <!-- 识别进度条 -->
-    <div v-if="isTranscribing && progress > 0" class="progress-bar">
-      <div class="progress-fill" :style="{ width: (progress * 100) + '%' }"></div>
+    <!-- 录音提示 -->
+    <div v-if="isRecording" class="recording-hint">
+      正在听取你的描述，用你自己的话描述视频内容即可...
     </div>
 
     <textarea
       :value="text"
-      :placeholder="
-        isTranscribing
-          ? interim || '正在听写...'
-          : '输入或语音识别视频中的文案内容，生成将基于此文本...'
-      "
+      :placeholder="placeholder"
       class="trans-textarea"
-      rows="4"
+      rows="5"
       @input="$emit('update:text', $event.target.value)"
     ></textarea>
 
-    <div class="char-count" v-if="text">{{ text.length }} 字</div>
+    <div class="footer">
+      <span v-if="text" class="char-count">{{ text.length }} 字</span>
+      <span class="hint">描述越详细，生成的标题越精准</span>
+    </div>
   </div>
 </template>
 
 <script setup>
 defineProps({
   text: { type: String, default: '' },
-  interim: { type: String, default: '' },
-  isTranscribing: Boolean,
-  progress: { type: Number, default: 0 },
+  isRecording: Boolean,
   hasVideo: Boolean,
 })
 
-defineEmits(['transcribe', 'update:text'])
+defineEmits(['start-record', 'stop-record', 'update:text'])
+
+const placeholder = '输入或口述视频的主要内容，例如：「这个视频讲的是如何用剪映自动生成字幕，适合新手，操作特别简单...」'
 </script>
 
 <style scoped>
@@ -84,58 +89,72 @@ defineEmits(['transcribe', 'update:text'])
   gap: 6px;
 }
 
-.status-badge {
-  font-size: 11px;
+.btn-record {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-bg);
   color: var(--primary);
+  cursor: pointer;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 4px;
+  font-family: inherit;
+  transition: all 0.15s;
 }
 
-.status-badge.recording .pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.btn-record:hover {
   background: var(--primary);
-  animation: pulse 1s infinite;
+  color: #fff;
 }
 
-@keyframes pulse {
+.btn-record.recording {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0); }
+}
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: pulse-dot 0.8s infinite;
+}
+
+@keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
 
-.btn-action {
+.btn-clear {
   font-size: 11px;
   padding: 4px 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-action:hover {
-  border-color: var(--primary);
-}
-
-.btn-clear {
   color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.progress-bar {
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
-}
+.btn-clear:hover { color: #dc2626; border-color: #dc2626; }
 
-.progress-fill {
-  height: 100%;
-  background: var(--primary);
-  border-radius: 2px;
-  transition: width 0.3s;
+.recording-hint {
+  font-size: 12px;
+  color: var(--primary);
+  padding: 6px 10px;
+  background: var(--primary-bg);
+  border-radius: 6px;
+  text-align: center;
 }
 
 .trans-textarea {
@@ -149,7 +168,7 @@ defineEmits(['transcribe', 'update:text'])
   font-family: inherit;
   background: var(--bg);
   color: var(--text);
-  min-height: 80px;
+  min-height: 90px;
   box-sizing: border-box;
 }
 
@@ -160,11 +179,22 @@ defineEmits(['transcribe', 'update:text'])
 
 .trans-textarea::placeholder {
   color: var(--text-muted);
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .char-count {
   font-size: 11px;
   color: var(--text-muted);
-  text-align: right;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 </style>

@@ -20,14 +20,13 @@
       v-model:selected="store.selectedPlatforms"
     />
 
-    <!-- 转写区域 -->
+    <!-- 内容描述 -->
     <TranscriptionEdit
       :text="store.transcription"
-      :interim="store.interimTranscription"
-      :is-transcribing="store.isTranscribing"
-      :progress="store.transcribeProgress"
+      :is-recording="store.isRecording"
       :has-video="store.hasVideo"
-      @transcribe="store.startTranscription"
+      @start-record="store.startRecording"
+      @stop-record="store.stopRecording"
       @update:text="store.setTranscription"
     />
 
