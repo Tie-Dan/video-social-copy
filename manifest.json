@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "短视频多平台文案生成器",
+  "version": "1.0.0",
+  "description": "上传短视频，AI自动生成适配抖音、小红书、快手、视频号的标题和描述，一键复制发布",
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://api.deepseek.com/*"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "短视频文案生成器",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "options_page": "settings.html"
+}
