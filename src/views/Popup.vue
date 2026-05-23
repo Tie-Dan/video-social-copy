@@ -94,8 +94,6 @@ onMounted(async () => {
   store.syncSettings({
     deepseekApiKey: settingsStore.deepseekApiKey,
     deepseekModel: settingsStore.deepseekModel,
-    asrAppId: settingsStore.asrAppId,
-    asrToken: settingsStore.asrToken,
   })
 })
 

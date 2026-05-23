@@ -27,8 +27,6 @@ export const useAppStore = defineStore('app', () => {
 
   const apiKey = ref('')
   const model = ref('deepseek-chat')
-  const asrAppId = ref('')
-  const asrToken = ref('')
 
   const hasVideo = computed(() => !!videoFile.value)
   const hasTranscription = computed(() => transcription.value.length > 0)
@@ -63,13 +61,24 @@ export const useAppStore = defineStore('app', () => {
     error.value = ''
 
     try {
+      // 直接从 chrome.storage 读取，绕过 Pinia 跨页面同步问题
+      let asrConfig = {}
+      try {
+        const result = await chrome.storage.local.get('video_copy_settings')
+        const data = result?.video_copy_settings || {}
+        asrConfig = { appId: data.asrAppId || '', accessToken: data.asrToken || '' }
+      } catch {
+        const raw = localStorage.getItem('video_copy_settings')
+        if (raw) {
+          const data = JSON.parse(raw)
+          asrConfig = { appId: data.asrAppId || '', accessToken: data.asrToken || '' }
+        }
+      }
+
       transcribeProgress.value = 0.3
       const audioBlob = await extractAudio(videoFile.value)
       transcribeProgress.value = 0.5
-      const text = await transcribeAudio(audioBlob, {
-        appId: asrAppId.value,
-        accessToken: asrToken.value,
-      })
+      const text = await transcribeAudio(audioBlob, asrConfig)
       transcribeProgress.value = 1
       transcription.value = text
     } catch (e) {
@@ -141,8 +150,6 @@ export const useAppStore = defineStore('app', () => {
   function syncSettings(settings) {
     apiKey.value = settings.deepseekApiKey || ''
     model.value = settings.deepseekModel || 'deepseek-chat'
-    asrAppId.value = settings.asrAppId || ''
-    asrToken.value = settings.asrToken || ''
   }
 
   return {
