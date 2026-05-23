@@ -45,6 +45,46 @@
       </div>
     </section>
 
+    <!-- ASR 配置 -->
+    <section class="settings-section">
+      <h2>语音识别（ASR）配置</h2>
+      <p class="desc">
+        上传视频后自动提取语音转文字。使用火山引擎语音识别服务，
+        <a href="https://console.volcengine.com/speech/service/8" target="_blank">点此开通</a>
+      </p>
+      <p class="desc" style="margin-bottom:12px;">
+        <strong>开通步骤：</strong>注册 → 实名认证 → 开通「一句话识别」→ 获取 App ID 和 Access Token
+      </p>
+      <div class="form-group">
+        <label>App ID</label>
+        <input
+          v-model="asrAppIdInput"
+          placeholder="从火山引擎控制台获取"
+          class="input"
+        />
+      </div>
+      <div class="form-group">
+        <label>Access Token</label>
+        <div class="input-row">
+          <input
+            :type="showAsrToken ? 'text' : 'password'"
+            v-model="asrTokenInput"
+            placeholder="从火山引擎控制台获取"
+            class="input"
+          />
+          <button class="toggle-btn" @click="showAsrToken = !showAsrToken">
+            {{ showAsrToken ? '🙈' : '👁️' }}
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-primary" @click="saveAsrConfig" :disabled="savingAsr">
+        {{ savingAsr ? '保存中...' : '保存语音识别配置' }}
+      </button>
+      <div v-if="asrMsg" class="test-result" :class="asrMsg.ok ? 'ok' : 'fail'">
+        {{ asrMsg.msg }}
+      </div>
+    </section>
+
     <!-- 历史记录 -->
     <section class="settings-section">
       <h2>历史记录</h2>
@@ -90,16 +130,23 @@ const store = useSettingsStore()
 
 const apiKeyInput = ref('')
 const modelInput = ref('deepseek-chat')
+const asrAppIdInput = ref('')
+const asrTokenInput = ref('')
 const showKey = ref(false)
+const showAsrToken = ref(false)
 const saving = ref(false)
+const savingAsr = ref(false)
 const testing = ref(false)
 const testResult = ref(null)
 const saveMsg = ref(null)
+const asrMsg = ref(null)
 
 onMounted(async () => {
   await store.load()
   apiKeyInput.value = store.deepseekApiKey
   modelInput.value = store.deepseekModel
+  asrAppIdInput.value = store.asrAppId
+  asrTokenInput.value = store.asrToken
 })
 
 async function saveApiConfig() {
@@ -115,6 +162,20 @@ async function saveApiConfig() {
     saveMsg.value = { ok: false, msg: `保存失败: ${e.message}` }
   } finally {
     saving.value = false
+  }
+}
+
+async function saveAsrConfig() {
+  savingAsr.value = true
+  asrMsg.value = null
+  try {
+    await store.setAsrConfig(asrAppIdInput.value, asrTokenInput.value)
+    asrMsg.value = { ok: true, msg: '语音识别配置保存成功 ✓' }
+    setTimeout(() => { asrMsg.value = null }, 2500)
+  } catch (e) {
+    asrMsg.value = { ok: false, msg: `保存失败: ${e.message}` }
+  } finally {
+    savingAsr.value = false
   }
 }
 

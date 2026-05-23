@@ -1,32 +1,33 @@
 /**
  * 全局应用状态
- * 管理视频上传 → 转写/口述 → 生成 → 复制 全流程状态
+ * 视频上传 → ASR语音转文字 → DeepSeek生成文案 → 复制
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getDefaultPlatformIds } from '../config/platforms.js'
 import { getProvider } from '../config/models.js'
-import { getVideoInfo, getVideoThumbnail } from '../services/video-processor.js'
+import { getVideoInfo, getVideoThumbnail, extractAudio } from '../services/video-processor.js'
+import { transcribeAudio } from '../services/asr-client.js'
 import { startDictation } from '../services/speech-recognition.js'
 import { generateContent } from '../services/deepseek-client.js'
 import { buildAllPlatformMessages, buildMessages } from '../services/prompt-engine.js'
 
 export const useAppStore = defineStore('app', () => {
-  // ====== 视频相关 ======
+  // ====== 视频 ======
   const videoFile = ref(null)
   const videoUrl = ref(null)
   const videoInfo = ref(null)
   const thumbnail = ref(null)
 
-  // ====== 口述/转写 ======
+  // ====== 转写 ======
   const transcription = ref('')
+  const isTranscribing = ref(false)
+  const transcribeProgress = ref(0)
   const isRecording = ref(false)
-  const dictation = ref(null) // { stop: fn } 口述控制器
+  const dictationCtrl = ref(null)
 
-  // ====== 平台选择 ======
+  // ====== 平台 & 生成 ======
   const selectedPlatforms = ref(getDefaultPlatformIds())
-
-  // ====== 生成相关 ======
   const results = ref({})
   const isGenerating = ref(false)
   const error = ref('')
@@ -34,6 +35,8 @@ export const useAppStore = defineStore('app', () => {
   // ====== 设置 ======
   const apiKey = ref('')
   const model = ref('deepseek-chat')
+  const asrAppId = ref('')
+  const asrToken = ref('')
 
   // ====== 计算属性 ======
   const hasVideo = computed(() => !!videoFile.value)
@@ -41,14 +44,12 @@ export const useAppStore = defineStore('app', () => {
   const hasResults = computed(() => Object.keys(results.value).length > 0)
   const canGenerate = computed(() => hasVideo.value && !isGenerating.value)
 
-  // ====== 动作 ======
+  // ====== 视频操作 ======
 
-  /** 设置视频文件 */
   async function setVideo(file) {
     resetAll()
     videoFile.value = file
     videoUrl.value = URL.createObjectURL(file)
-
     try {
       const [info, thumb] = await Promise.all([
         getVideoInfo(file),
@@ -61,50 +62,75 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** 移除视频 */
   function removeVideo() {
-    if (videoUrl.value) {
-      URL.revokeObjectURL(videoUrl.value)
-    }
+    if (videoUrl.value) URL.revokeObjectURL(videoUrl.value)
     resetAll()
   }
 
-  /** 开始口述识别 */
-  function startRecording() {
-    isRecording.value = true
+  // ====== ASR 自动转写 ======
+
+  async function startAutoTranscribe() {
+    if (!videoFile.value) return
+
+    isTranscribing.value = true
+    transcribeProgress.value = 0
     error.value = ''
     transcription.value = ''
 
-    dictation.value = startDictation({
-      onResult: (text) => {
-        transcription.value = text
-      },
+    try {
+      // Step 1: 提取音频
+      transcribeProgress.value = 0.1
+      const audioBlob = await extractAudio(videoFile.value)
+
+      // Step 2: 发送 ASR
+      transcribeProgress.value = 0.3
+      const text = await transcribeAudio(audioBlob, {
+        appId: asrAppId.value,
+        accessToken: asrToken.value,
+      })
+
+      transcribeProgress.value = 1
+      transcription.value = text
+    } catch (e) {
+      error.value = `自动识别失败: ${e.message}`
+    } finally {
+      isTranscribing.value = false
+    }
+  }
+
+  // ====== 口述识别（备选） ======
+
+  function startRecording() {
+    isRecording.value = true
+    error.value = ''
+
+    dictationCtrl.value = startDictation({
+      onResult: (text) => { transcription.value = text },
       onDone: (text) => {
         transcription.value = text
         isRecording.value = false
-        dictation.value = null
+        dictationCtrl.value = null
       },
       onError: (msg) => {
         error.value = msg
         isRecording.value = false
-        dictation.value = null
+        dictationCtrl.value = null
       },
     })
   }
 
-  /** 停止口述 */
   function stopRecording() {
-    dictation.value?.stop()
+    dictationCtrl.value?.stop()
     isRecording.value = false
-    dictation.value = null
+    dictationCtrl.value = null
   }
 
-  /** 手动设置文本 */
   function setTranscription(text) {
     transcription.value = text
   }
 
-  /** 生成文案 */
+  // ====== 生成文案 ======
+
   async function generateCopy() {
     if (!canGenerate.value) return
 
@@ -113,7 +139,7 @@ export const useAppStore = defineStore('app', () => {
     results.value = {}
 
     if (!apiKey.value) {
-      error.value = '请先在右上角 ⚙️ 设置中配置 DeepSeek API Key'
+      error.value = '请先在设置中配置 DeepSeek API Key'
       isGenerating.value = false
       return
     }
@@ -131,17 +157,12 @@ export const useAppStore = defineStore('app', () => {
       duration: videoInfo.value?.durationFormatted || '',
     }
 
-    const platformMessages = buildAllPlatformMessages(
-      selectedPlatforms.value,
-      videoData
-    )
+    const platformMessages = buildAllPlatformMessages(selectedPlatforms.value, videoData)
 
     const promises = selectedPlatforms.value.map(async (platformId) => {
       const msg = platformMessages.get(platformId)
-      const messages = buildMessages(msg.system, msg.user)
-
       try {
-        const result = await generateContent(config, messages)
+        const result = await generateContent(config, buildMessages(msg.system, msg.user))
         return { platformId, result, error: null }
       } catch (e) {
         return { platformId, result: null, error: e.message }
@@ -149,24 +170,19 @@ export const useAppStore = defineStore('app', () => {
     })
 
     const allResults = await Promise.all(promises)
-
     for (const { platformId, result, error: err } of allResults) {
       if (result) {
         results.value[platformId] = result
       } else if (err) {
-        results.value[platformId] = {
-          titles: [],
-          description: '',
-          tags: [],
-          _error: err,
-        }
+        results.value[platformId] = { titles: [], description: '', tags: [], _error: err }
       }
     }
 
     isGenerating.value = false
   }
 
-  /** 重置 */
+  // ====== 重置 ======
+
   function resetAll() {
     stopRecording()
     videoFile.value = null
@@ -174,39 +190,27 @@ export const useAppStore = defineStore('app', () => {
     videoInfo.value = null
     thumbnail.value = null
     transcription.value = ''
+    isTranscribing.value = false
+    transcribeProgress.value = 0
     results.value = {}
     isGenerating.value = false
     error.value = ''
   }
 
-  /** 同步设置 */
   function syncSettings(settings) {
     apiKey.value = settings.deepseekApiKey || ''
     model.value = settings.deepseekModel || 'deepseek-chat'
+    asrAppId.value = settings.asrAppId || ''
+    asrToken.value = settings.asrToken || ''
   }
 
   return {
-    videoFile,
-    videoUrl,
-    videoInfo,
-    thumbnail,
-    transcription,
-    isRecording,
-    selectedPlatforms,
-    results,
-    isGenerating,
-    error,
-    hasVideo,
-    hasTranscription,
-    hasResults,
-    canGenerate,
-    setVideo,
-    removeVideo,
-    startRecording,
-    stopRecording,
-    setTranscription,
-    generateCopy,
-    resetAll,
-    syncSettings,
+    videoFile, videoUrl, videoInfo, thumbnail,
+    transcription, isTranscribing, transcribeProgress, isRecording,
+    selectedPlatforms, results, isGenerating, error,
+    hasVideo, hasTranscription, hasResults, canGenerate,
+    setVideo, removeVideo,
+    startAutoTranscribe, startRecording, stopRecording, setTranscription,
+    generateCopy, resetAll, syncSettings,
   }
 })

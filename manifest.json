@@ -9,7 +9,8 @@
     "offscreen"
   ],
   "host_permissions": [
-    "https://api.deepseek.com/*"
+    "https://api.deepseek.com/*",
+    "https://openspeech.bytedance.com/*"
   ],
   "action": {
     "default_popup": "index.html",
